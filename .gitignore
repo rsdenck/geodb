@@ -2,15 +2,13 @@
 bin/
 geoip
 
-# MMDB files (proprietary, not redistributable)
+# Large raw data files (not versioned - use db/ dump instead)
+data/ranges.json
 data/*.mmdb
 
-# Large RIPE raw data (not versioned - use db/ dump instead)
-data/ranges.json
-
-# Source data files (not versioned)
-data/br_asns.json
-data/abusive_ips.json
+# Documentation not for versioning
+repo.md
+base.md
 
 # OS
 .DS_Store
@@ -21,3 +19,4 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+gh.md

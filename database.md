@@ -1,268 +1,131 @@
-# IPv4 existem no mundo:
-- Total de IPv4 possíveis:
-2^32 = 4.294.967.296 endereços IPv4 (~4,29 bilhões)
----
-# Resumo
-```bash
-| Item                    | Quantidade         |
-| ----------------------- | ------------------ |
-| ASNs globais            | ~100.000 – 110.000 |
-| IPv4 total (teórico)    | 4.294.967.296      |
-| IPv4 utilizável público | ~3.7 bilhões       |
-| Status IPv4             | Esgotado (RIRs)    |
+# Internet Global Mapping Database Schema
 
-# Espaço total de IPv6
-- Total de IPv6 possíveis:
-2^128 ≈ 3,4 × 10^38 endereços
----
-# Espaço alocado pelos RIRs
-- Os blocos IPv6 já distribuídos por:
-RIPE NCC
-ARIN
-LACNIC
-APNIC
-AFRINIC
----
-- TOTAL:
-```bash
-| Característica | IPv4          | IPv6                   |
-| -------------- | ------------- | ---------------------- |
-| Bits           | 32-bit        | 128-bit                |
-| Total possível | ~4,3 bilhões  | ~3,4 × 10³⁸            |
-| Status         | Esgotado      | Praticamente ilimitado |
-| Uso global     | ~100% adotado | ~40% tráfego global    |
-----
-# 5 camadas:
-ASN / identidade de rede
-Prefixos IP (IPv4/IPv6)
-Roteamento (BGP paths ao longo do tempo)
-Alocação (RIRs / WHOIS)
-Observações externas (geo, reputação, DNS, etc.)
-- preciso de 20 a 35 tabelas para mapear TUDO!
--- =========================================================
--- INTERNET GLOBAL MAPPING DATABASE (ASN + IP + BGP + RIR)
--- TimescaleDB + PostgreSQL Schema (single block)
--- =========================================================
+## Layer 1: ASN Core
 
--- =========================
--- 1. ASN CORE
--- =========================
-CREATE TABLE asn (
-    asn BIGINT PRIMARY KEY,
-    name TEXT,
-    country CHAR(2),
-    rir TEXT,
-    created_at TIMESTAMPTZ
-);
+| Table | Type | Records | Description |
+|-------|------|--------:|-------------|
+| asn | standard | 85.748 | ASN registry (PK: asn, FK targets: ip_prefix, asn_prefix_map, asn_org, asn_contact) |
+| asn_org | standard | 0 | ASN organizations (FK -> asn ON DELETE CASCADE) |
+| asn_contact | standard | 0 | ASN contact/abuse info (FK -> asn ON DELETE CASCADE) |
 
-CREATE TABLE asn_org (
-    id SERIAL PRIMARY KEY,
-    asn BIGINT REFERENCES asn(asn),
-    org_name TEXT,
-    country CHAR(2),
-    source TEXT,
-    updated_at TIMESTAMPTZ
-);
+Columns in `asn`:
+- `asn` BIGINT PK - Autonomous System Number
+- `name` TEXT - ASN name/holder
+- `country` CHAR(2) - Country code
+- `rir` TEXT - Regional Internet Registry (RIPE, ARIN, LACNIC, APNIC, AFRINIC)
+- `created_at` TIMESTAMPTZ - First seen timestamp
 
-CREATE TABLE asn_contact (
-    id SERIAL PRIMARY KEY,
-    asn BIGINT REFERENCES asn(asn),
-    email TEXT,
-    abuse_contact TEXT,
-    phone TEXT
-);
+## Layer 2: IP Prefix
 
--- =========================
--- 2. IP PREFIXES (IPv4 + IPv6)
--- =========================
-CREATE TABLE ip_prefix (
-    prefix CIDR PRIMARY KEY,
-    version SMALLINT, -- 4 or 6
-    asn BIGINT REFERENCES asn(asn),
-    country CHAR(2),
-    rir TEXT,
-    first_seen TIMESTAMPTZ,
-    last_seen TIMESTAMPTZ
-);
+| Table | Type | Records | Description |
+|-------|------|--------:|-------------|
+| ip_prefix | standard | 6.744.521 | All IP prefixes (4.4M IPv4 + 2.3M IPv6) |
+| asn_prefix_map | standard | 1.591.878 | ASN-to-prefix mapping |
+| prefix_history | hypertable | 0 | Prefix change history |
+| asn_prefix_history | hypertable | 0 | ASN-prefix relationship history |
 
-CREATE TABLE prefix_history (
-    time TIMESTAMPTZ NOT NULL,
-    prefix CIDR,
-    asn BIGINT,
-    event_type TEXT, -- announce, withdraw, change
-    source TEXT
-);
+Columns in `ip_prefix`:
+- `prefix` CIDR PK - Network prefix
+- `version` SMALLINT - 4 for IPv4, 6 for IPv6
+- `asn` BIGINT - Nullable FK -> asn(asn) ON DELETE SET NULL
+- `country` CHAR(2) - Country code
+- `rir` TEXT - RIR source
+- `first_seen` TIMESTAMPTZ
+- `last_seen` TIMESTAMPTZ
 
-SELECT create_hypertable('prefix_history', 'time');
+Columns in `asn_prefix_map`:
+- `asn` BIGINT - FK -> asn(asn) ON DELETE CASCADE
+- `prefix` CIDR
+- `active` BOOLEAN - Whether this mapping is currently active
+- `first_seen` TIMESTAMPTZ
+- `last_seen` TIMESTAMPTZ
 
--- =========================
--- 3. BGP CORE (TIME SERIES)
--- =========================
-CREATE TABLE bgp_update (
-    time TIMESTAMPTZ NOT NULL,
-    prefix CIDR,
-    asn BIGINT,
-    next_hop INET,
-    as_path BIGINT[],
-    origin TEXT,
-    collector TEXT,
-    raw JSONB
-);
+## Layer 3: RIR (Regional Internet Registry)
 
-SELECT create_hypertable('bgp_update', 'time');
+| Table | Type | Records | Description |
+|-------|------|--------:|-------------|
+| rir_allocation | standard | 0 | RIR allocation records |
+| rir_assignment_history | hypertable | 0 | RIR assignment history |
 
-CREATE TABLE bgp_rib_snapshot (
-    time TIMESTAMPTZ NOT NULL,
-    collector TEXT,
-    total_prefixes INT,
-    total_asns INT,
-    snapshot JSONB
-);
+## Layer 4: Geolocation
 
-SELECT create_hypertable('bgp_rib_snapshot', 'time');
+| Table | Type | Records | Description |
+|-------|------|--------:|-------------|
+| ip_geo | standard | 5.863.490 | IP geolocation by prefix |
+| asn_geo | standard | 85.748 | ASN geolocation |
 
-CREATE TABLE bgp_as_path (
-    id BIGSERIAL PRIMARY KEY,
-    as_path BIGINT[],
-    prefix CIDR,
-    origin_asn BIGINT,
-    time TIMESTAMPTZ
-);
+Columns in `ip_geo`:
+- `prefix` CIDR PK - Network prefix
+- `country` CHAR(2) - Country code
+- `region` TEXT - State/region name
+- `city` TEXT - City name
+- `latitude` DOUBLE PRECISION
+- `longitude` DOUBLE PRECISION
+- `postal` TEXT - Postal code
+- `timezone` TEXT - Timezone string
+- `isp` TEXT - ISP/org name
+- `updated_at` TIMESTAMPTZ
 
--- =========================
--- 4. ASN ↔ PREFIX RELATIONSHIP
--- =========================
-CREATE TABLE asn_prefix_map (
-    asn BIGINT,
-    prefix CIDR,
-    active BOOLEAN DEFAULT TRUE,
-    first_seen TIMESTAMPTZ,
-    last_seen TIMESTAMPTZ,
-    PRIMARY KEY (asn, prefix)
-);
+Columns in `asn_geo`:
+- `asn` BIGINT PK - FK -> asn(asn)
+- `country` CHAR(2) - Country code
+- `org` TEXT - Organization name
+- `updated_at` TIMESTAMPTZ
 
-CREATE TABLE asn_prefix_history (
-    time TIMESTAMPTZ NOT NULL,
-    asn BIGINT,
-    prefix CIDR,
-    event TEXT
-);
+## Layer 5: BGP (Border Gateway Protocol)
 
-SELECT create_hypertable('asn_prefix_history', 'time');
+| Table | Type | Records | Description |
+|-------|------|--------:|-------------|
+| bgp_update | hypertable | 0 | BGP route updates |
+| bgp_rib_snapshot | hypertable | 0 | BGP RIB snapshots by collector |
+| bgp_as_path | standard | 0 | AS path records |
+| bgp_event | hypertable | 0 | BGP events (announce, withdraw, hijack) |
 
--- =========================
--- 5. RIR / ALLOCATION LAYER
--- =========================
-CREATE TABLE rir_allocation (
-    prefix CIDR PRIMARY KEY,
-    rir TEXT,
-    country CHAR(2),
-    status TEXT,
-    allocated_at TIMESTAMPTZ
-);
+## Layer 6: Routing Anomalies
 
-CREATE TABLE rir_assignment_history (
-    time TIMESTAMPTZ NOT NULL,
-    prefix CIDR,
-    rir TEXT,
-    status TEXT
-);
+| Table | Type | Records | Description |
+|-------|------|--------:|-------------|
+| routing_anomaly | hypertable | 0 | Anomaly detection (hijack, leak, path changes) |
+| prefix_flap | hypertable | 0 | Prefix flap events |
 
-SELECT create_hypertable('rir_assignment_history', 'time');
+## Layer 7: DNS
 
--- =========================
--- 6. GEO / ENRICHMENT
--- =========================
-CREATE TABLE ip_geo (
-    prefix CIDR PRIMARY KEY,
-    country CHAR(2),
-    region TEXT,
-    city TEXT,
-    latitude DOUBLE PRECISION,
-    longitude DOUBLE PRECISION,
-    isp TEXT,
-    updated_at TIMESTAMPTZ
-);
+| Table | Type | Records | Description |
+|-------|------|--------:|-------------|
+| dns_resolution | hypertable | 0 | Historical DNS resolutions |
+| rdns_history | hypertable | 0 | Reverse DNS (PTR) history |
 
-CREATE TABLE asn_geo (
-    asn BIGINT PRIMARY KEY,
-    country CHAR(2),
-    org TEXT,
-    updated_at TIMESTAMPTZ
-);
+## Layer 8: Reputation / Threat Intelligence
 
--- =========================
--- 7. EVENTS / SECURITY / ANOMALIES
--- =========================
-CREATE TABLE bgp_event (
-    time TIMESTAMPTZ NOT NULL,
-    event_type TEXT, -- announce, withdraw, hijack, flap
-    prefix CIDR,
-    asn BIGINT,
-    severity TEXT,
-    raw JSONB
-);
+| Table | Type | Records | Description |
+|-------|------|--------:|-------------|
+| reputation_score | hypertable | 0 | Prefix reputation scores |
 
-SELECT create_hypertable('bgp_event', 'time');
+## Totals
 
-CREATE TABLE routing_anomaly (
-    time TIMESTAMPTZ NOT NULL,
-    prefix CIDR,
-    expected_asn BIGINT,
-    observed_asn BIGINT,
-    anomaly_type TEXT,
-    confidence DOUBLE PRECISION
-);
+| Metric | Value |
+|--------|------:|
+| Total tables | 21 |
+| Hypertables | 11 |
+| Total records | 14.285.637 |
+| Total ASNs | 85.748 |
+| Total IP prefixes | 6.744.521 |
+| Total geo records | 5.863.490 |
+| Total ASN-prefix mappings | 1.591.878 |
+| IPv4 prefixes | 4.433.689 |
+| IPv6 prefixes | 2.310.832 |
+| IPv4 sum (w/ overlap) | 7.316.945.834 |
+| Unique IPv4 coverage | ~465 million IPs |
 
-SELECT create_hypertable('routing_anomaly', 'time');
+## Indexes
 
-CREATE TABLE prefix_flap (
-    time TIMESTAMPTZ NOT NULL,
-    prefix CIDR,
-    asn BIGINT,
-    flap_count INT
-);
-
-SELECT create_hypertable('prefix_flap', 'time');
-
--- =========================
--- 8. DNS / REPUTATION (OPTIONAL ENRICHMENT)
--- =========================
-CREATE TABLE dns_resolution (
-    time TIMESTAMPTZ NOT NULL,
-    ip INET,
-    hostname TEXT,
-    resolver TEXT
-);
-
-SELECT create_hypertable('dns_resolution', 'time');
-
-CREATE TABLE rdns_history (
-    time TIMESTAMPTZ NOT NULL,
-    ip INET,
-    ptr TEXT
-);
-
-SELECT create_hypertable('rdns_history', 'time');
-
-CREATE TABLE reputation_score (
-    time TIMESTAMPTZ NOT NULL,
-    prefix CIDR,
-    score DOUBLE PRECISION,
-    source TEXT
-);
-
-SELECT create_hypertable('reputation_score', 'time');
-
--- =========================
--- INDEXES (CRITICAL FOR BGP QUERIES)
--- =========================
+```sql
 CREATE INDEX idx_bgp_update_prefix ON bgp_update(prefix);
 CREATE INDEX idx_bgp_update_asn ON bgp_update(asn);
 CREATE INDEX idx_bgp_event_prefix ON bgp_event(prefix);
 CREATE INDEX idx_asn_prefix_map_prefix ON asn_prefix_map(prefix);
 CREATE INDEX idx_asn_prefix_map_asn ON asn_prefix_map(asn);
-
--- =========================================================
--- END OF SCHEMA
--- =========================================================
+CREATE INDEX idx_ip_geo_country ON ip_geo(country);
+CREATE INDEX idx_ip_prefix_asn ON ip_prefix(asn);
+CREATE INDEX idx_ip_prefix_country ON ip_prefix(country);
+```

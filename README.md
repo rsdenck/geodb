@@ -1,27 +1,30 @@
 # Internet Global Mapping Database (geodb)
 
-Build a global IP geolocation and routing database using MaxMind GeoLite2, RIPEstat, and RIPE data on PostgreSQL + TimescaleDB.
+Global IP geolocation and routing database built from RIPEstat, RIPE IP map, and GeoIP database files, running on PostgreSQL + TimescaleDB.
 
 ## Directory Structure
 
 ```
 /
-  src/           # Go source code (main.go, schema.go, migrate.go, scraper.go, mmdb.go, range.go)
-  db/            # Database schema (geoip.sql)
-  bin/           # Compiled binary (geoip)
-  data/          # MMDB files, ranges.json, ASN lists (not versioned)
+  src/           # Go source code (main.go, schema.go, migrate.go, scraper.go)
+  db/            # Database schema + data exports
+  bin/           # Compiled binary
+  data/          # GeoIP database files, ranges.json, ASN lists (not versioned)
 ```
 
 ## Quick Start
 
 ```bash
-# 1. Apply schema
+# 1. Create database
+createdb -U geoip geoip
+
+# 2. Apply schema
 psql -U geoip -d geoip -f db/geoip.sql
 
-# 2. Build
+# 3. Build
 cd src && go build -o ../bin/geoip .
 
-# 3. Run database builder
+# 4. Run builder
 cd .. && ./bin/geoip
 ```
 
@@ -29,8 +32,8 @@ cd .. && ./bin/geoip
 
 - PostgreSQL 14+ with TimescaleDB extension
 - Go 1.26+
-- MaxMind GeoLite2 City + ASN databases in `data/`
-- RIPE range store (`data/ranges.json`)
+- GeoIP database files in `data/` (city.mmdb, asn.mmdb, country.mmdb)
+- RIPE range store (`data/ranges.json`) for full internet coverage
 - ~5 minutes build time
 
 ## Database Statistics
@@ -38,12 +41,11 @@ cd .. && ./bin/geoip
 | Table | Records |
 |-------|--------:|
 | asn | 85,748 |
-| ip_prefix | 6,744,521 (4.4M IPv4 + 2.3M IPv6) |
+| ip_prefix | 6,744,521 |
 | asn_prefix_map | 1,591,878 |
 | ip_geo | 5,863,490 |
 | asn_geo | 85,748 |
-
-Total IP coverage: ~7.3 billion IPv4 addresses (sum), ~465 million unique /24 blocks.
+| Total | 14,285,637 |
 
 ## Environment Variables
 

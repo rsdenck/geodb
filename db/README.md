@@ -1,50 +1,54 @@
-# db/ - Database Schema
+# db/ - Database Schema and Data
 
 ## Files
 
 | File | Description |
 |------|-------------|
-| `geoip.sql` | Full PostgreSQL schema: 20 tables, 11 hypertables, indexes, foreign keys |
+| `geoip.sql` | Full PostgreSQL schema: 20 tables, 11 hypertables, indexes, FK |
+| `geoip.dump` | Compressed SQL dump (87MB) with all data |
+| `asn.json` | ASN registry in JSON format (643KB) |
+| `asn_geo.json` | ASN geolocation in JSON format (9.7MB) |
+| `restore.sh` | Restore script for geoip.dump |
 
-## How to Apply the Schema
-
-### Create a fresh database
+## Restore Database
 
 ```bash
+# Create empty database
 createdb -U geoip geoip
-psql -U geoip -d geoip -f db/geoip.sql
+
+# Restore from compressed dump
+./db/restore.sh
+
+# Or manually:
+PGPASSWORD=geoip123 pg_restore -h 127.0.0.1 -U geoip -d geoip --no-owner --no-privileges db/geoip.dump
 ```
 
-### Add TimescaleDB extensions
-
-The schema includes `CREATE EXTENSION IF NOT EXISTS timescaledb`. Ensure the extension is installed:
+## Apply Schema Only
 
 ```bash
-# As superuser
-psql -U postgres -d geoip -c "CREATE EXTENSION IF NOT EXISTS timescaledb"
+psql -U geoip -d geoip -f db/geoip.sql
 ```
 
 ## Schema Overview
 
 ### Layer 1: ASN
-- `asn` - ASN registry (PK: asn)
+- `asn` - ASN registry (85,748 records)
 - `asn_org` - ASN organizations
-- `asn_contact` - ASN abuse/email contacts
-- `asn_geo` - ASN geolocation
+- `asn_contact` - ASN contact/abuse info
 
 ### Layer 2: IP Prefix
-- `ip_prefix` - All IP prefixes with ASN/country/RIR
+- `ip_prefix` - All IP prefixes (6,744,521 records)
 - `prefix_history` - Prefix change history (hypertable)
-- `asn_prefix_map` - ASN-to-prefix mapping (PK: asn+prefix)
-- `asn_prefix_history` - ASN-prefix change history (hypertable)
+- `asn_prefix_map` - ASN-to-prefix mapping (1,591,878 records)
+- `asn_prefix_history` - ASN-prefix changes (hypertable)
 
 ### Layer 3: RIR
 - `rir_allocation` - RIR allocation records
 - `rir_assignment_history` - RIR assignment history (hypertable)
 
 ### Layer 4: Geolocation
-- `ip_geo` - IP geolocation data (MaxMind)
-- `asn_geo` - ASN geolocation data (MaxMind)
+- `ip_geo` - IP geolocation (5,863,490 records)
+- `asn_geo` - ASN geolocation (85,748 records)
 
 ### Layer 5: BGP
 - `bgp_update` - BGP route updates (hypertable)
@@ -53,24 +57,12 @@ psql -U postgres -d geoip -c "CREATE EXTENSION IF NOT EXISTS timescaledb"
 - `bgp_event` - BGP events (hypertable)
 
 ### Layer 6: Routing Anomalies
-- `routing_anomaly` - Routing anomaly detections (hypertable)
+- `routing_anomaly` - Anomaly detections (hypertable)
 - `prefix_flap` - Prefix flap events (hypertable)
 
 ### Layer 7: DNS
-- `dns_resolution` - Historical DNS resolutions (hypertable)
+- `dns_resolution` - Historical DNS (hypertable)
 - `rdns_history` - Reverse DNS history (hypertable)
 
 ### Layer 8: Reputation
-- `reputation_score` - Prefix reputation scores (hypertable)
-
-## Current Data Population
-
-| Table | Records |
-|-------|--------:|
-| asn | 85,748 |
-| ip_prefix | 6,744,521 |
-| asn_prefix_map | 1,591,878 |
-| ip_geo | 5,863,490 |
-| asn_geo | 85,748 |
-
-Empty tables (awaiting data feeds): asn_org, asn_contact, prefix_history, asn_prefix_history, rir_allocation, rir_assignment_history, all BGP tables, all DNS tables, reputation_score.
+- `reputation_score` - Prefix reputation (hypertable)

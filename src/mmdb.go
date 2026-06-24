@@ -8,7 +8,7 @@ import (
 	"github.com/oschwald/maxminddb-golang/v2"
 )
 
-type MMDBResult struct {
+type GeoResult struct {
 	City    string
 	Region  string
 	Country string
@@ -18,31 +18,31 @@ type MMDBResult struct {
 	Lon     float64
 }
 
-type MMDBEngine struct {
+type GeoEngine struct {
 	cityDB    *maxminddb.Reader
 	asnDB     *maxminddb.Reader
 	countryDB *maxminddb.Reader
 	dataDir   string
 }
 
-func NewMMDBEngine(dataDir string) (*MMDBEngine, error) {
-	e := &MMDBEngine{dataDir: dataDir}
+func NewGeoEngine(dataDir string) (*GeoEngine, error) {
+	e := &GeoEngine{dataDir: dataDir}
 	var err error
 
-	cityPath := filepath.Join(dataDir, "GeoLite2-City.mmdb")
+	cityPath := filepath.Join(dataDir, "city.mmdb")
 	e.cityDB, err = maxminddb.Open(cityPath)
 	if err != nil {
 		return nil, fmt.Errorf("erro abrindo City DB: %w", err)
 	}
 
-	asnPath := filepath.Join(dataDir, "GeoLite2-ASN.mmdb")
+	asnPath := filepath.Join(dataDir, "asn.mmdb")
 	e.asnDB, err = maxminddb.Open(asnPath)
 	if err != nil {
 		e.cityDB.Close()
 		return nil, fmt.Errorf("erro abrindo ASN DB: %w", err)
 	}
 
-	countryPath := filepath.Join(dataDir, "GeoLite2-Country.mmdb")
+	countryPath := filepath.Join(dataDir, "country.mmdb")
 	e.countryDB, err = maxminddb.Open(countryPath)
 	if err != nil {
 		e.cityDB.Close()
@@ -53,7 +53,7 @@ func NewMMDBEngine(dataDir string) (*MMDBEngine, error) {
 	return e, nil
 }
 
-func (e *MMDBEngine) Close() {
+func (e *GeoEngine) Close() {
 	if e.cityDB != nil {
 		e.cityDB.Close()
 	}
@@ -65,13 +65,13 @@ func (e *MMDBEngine) Close() {
 	}
 }
 
-func (e *MMDBEngine) Lookup(ipStr string) (*MMDBResult, error) {
+func (e *GeoEngine) Lookup(ipStr string) (*GeoResult, error) {
 	addr, err := netip.ParseAddr(ipStr)
 	if err != nil {
 		return nil, fmt.Errorf("IP invalido: %s", ipStr)
 	}
 
-	res := &MMDBResult{}
+	res := &GeoResult{}
 
 	var city struct {
 		City struct {
@@ -142,5 +142,3 @@ func (e *MMDBEngine) Lookup(ipStr string) (*MMDBResult, error) {
 
 	return res, nil
 }
-
-

@@ -73,8 +73,8 @@ func migrateGeoIP() {
 	ctx := context.Background()
 	fmt.Println("=== POPULANDO TABELAS ===")
 
-	importMMDBCity(db, filepath.Join(geoDBPath(), "GeoLite2-City.mmdb"))
-	importMMDBASN(db, filepath.Join(geoDBPath(), "GeoLite2-ASN.mmdb"))
+	importGeoCity(db, filepath.Join(geoDBPath(), "city.mmdb"))
+	importGeoASN(db, filepath.Join(geoDBPath(), "asn.mmdb"))
 	importRangeStore(db)
 	importRIPEASNs(db)
 
@@ -88,8 +88,8 @@ func migrateGeoIP() {
 	fmt.Println("=== DATABASE PRONTO ===")
 }
 
-func importMMDBCity(db *PGStore, path string) {
-	fmt.Printf("City MMDB: %s\n", path)
+func importGeoCity(db *PGStore, path string) {
+	fmt.Printf("City geo: %s\n", path)
 
 	reader, err := maxminddb.Open(path)
 	if err != nil {
@@ -190,11 +190,11 @@ func importMMDBCity(db *PGStore, path string) {
 
 	_ = asnBatch
 	_ = seenASN
-	fmt.Printf("  City concluido: %d registros em %v\n", count, time.Since(start).Round(time.Second))
+	fmt.Printf("  City geo concluido: %d registros em %v\n", count, time.Since(start).Round(time.Second))
 }
 
-func importMMDBASN(db *PGStore, path string) {
-	fmt.Printf("ASN MMDB: %s\n", path)
+func importGeoASN(db *PGStore, path string) {
+	fmt.Printf("ASN geo: %s\n", path)
 
 	reader, err := maxminddb.Open(path)
 	if err != nil {
@@ -264,7 +264,7 @@ func importMMDBASN(db *PGStore, path string) {
 		bulkInsertASNPrefixMap(db, asnPrefixBatch)
 	}
 
-	fmt.Printf("  ASN concluido: %d registros em %v\n", count, time.Since(start).Round(time.Second))
+	fmt.Printf("  ASN geo concluido: %d registros em %v\n", count, time.Since(start).Round(time.Second))
 }
 
 func importRangeStore(db *PGStore) {
