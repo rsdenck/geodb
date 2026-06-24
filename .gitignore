@@ -1,0 +1,23 @@
+# Binaries
+bin/
+geoip
+
+# MMDB files (proprietary, not redistributable)
+data/*.mmdb
+
+# Large RIPE raw data (not versioned - use db/ dump instead)
+data/ranges.json
+
+# Source data files (not versioned)
+data/br_asns.json
+data/abusive_ips.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
